@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:snowflake="http://www.mulesoft.org/schema/mule/snowflake"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/snowflake http://www.mulesoft.org/schema/mule/snowflake/current/mule-snowflake.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="0cbf1541-642f-42a9-9777-6c809eedc6e3" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<snowflake:snowflake-config name="Snowflake_Config" doc:name="Snowflake Config" doc:id="33b74441-f710-4b02-8c1d-4f5362df4312" >
+		<snowflake:snowflake-connection accountName="gx43017.uae-north.azure" warehouse="COMPUTE_WH" database="SNOWFLAKE_SAMPLE_DATA" schema="TPCH_SF100" user="AMIR935" password="AmirP@$$1" role="ACCOUNTADMIN" />
+	</snowflake:snowflake-config>
+	<snowflake:snowflake-config name="Snowflake_Config1" doc:name="Snowflake Config" doc:id="54158dfe-6433-443a-9654-d806dc52177b" >
+		<snowflake:snowflake-connection accountName="gx43017.uae-north.azure" warehouse="COMPUTE_WH" database="employee" schema="employeeSch" user="AMIR935" password="AmirP@$$1" role="ACCOUNTADMIN" />
+	</snowflake:snowflake-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="0aa46375-68c7-4d6d-95b2-80d32d97cd10" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="root" database="nahudb" />
+	</db:config>
+	<flow name="snowflakeFlow" doc:id="b53ec7a0-a21e-4096-8291-d8590dbaaca0" >
+		<http:listener doc:name="Listener" doc:id="14258400-2319-4715-9e1a-0c23e87ce800" config-ref="HTTP_Listener_config" path="select"/>
+		<logger level="INFO" doc:name="Logger" doc:id="7fb947b6-a213-4fab-aa42-413cdef96678" message="started"/>
+		<snowflake:select doc:name="Select" doc:id="e313c0da-b73e-453b-978a-9b0a1f958f7a" config-ref="Snowflake_Config1">
+			<snowflake:sql ><![CDATA[select top 5 * from PERSONS]]></snowflake:sql>
+		</snowflake:select>
+		<ee:transform doc:name="Transform Message" doc:id="5a4813ad-4631-4450-ba03-6d1061ae2db7" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="snowflakeFlow1" doc:id="b7f2ce58-6110-4095-b073-c4e10ec567de" >
+		<http:listener doc:name="Listener" doc:id="da6b1284-8ec9-4842-9ec7-0332cb855d50" config-ref="HTTP_Listener_config" path="insert1"/>
+		<db:select doc:name="Select" doc:id="0dabc871-2a35-45f9-b78b-d77da66b9b38" config-ref="Database_Config">
+			<db:sql ><![CDATA[select * from persons]]></db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="75361d84-a664-4ede-b205-49b67cf0bd91" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<snowflake:bulk-insert doc:name="Bulk insert" doc:id="f4e0cb6e-ab8e-46e8-9b94-04ba10e1738b" config-ref="Snowflake_Config1">
+			<snowflake:bulk-input-parameters ><![CDATA[#[payload map{
+	"PersonID": ($.PersonID as String default ""),
+	"FirstName": ($.LastName default ""),
+	"LastName": ($.FirstName default ""),
+	"Address": ($.Address default ""),
+	"City": ($.City default "")
+}]]]></snowflake:bulk-input-parameters>
+			<snowflake:sql ><![CDATA[insert into PERSONS(PersonID,FirstName,LastName,Address,City) values(:PersonID,:FirstName,:LastName,:Address,:City)
+]]></snowflake:sql>
+		</snowflake:bulk-insert>
+		<set-payload value='#["inserted"]' doc:name="Set Payload" doc:id="5a32d935-dcce-492b-8dbb-9ff5b81a5492" />
+	</flow>
+	
+	
+	<flow name="snowflakeFlow2" doc:id="cfaacc79-5b90-4e39-b896-5d5db11dae86" >
+		<http:listener doc:name="Listener" doc:id="26859889-f7af-4184-80e9-70a478d1b508" config-ref="HTTP_Listener_config" path="insert"/>
+		<db:select doc:name="Select" doc:id="67c4e3a3-c4fb-437e-a027-fb44330adc35" config-ref="Database_Config">
+			<db:sql ><![CDATA[select * from persons]]></db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="881e702d-a8cb-4014-a876-119b60c9143f" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="da0adae1-4250-4df8-bc60-3c4e81b598b9" >
+			<snowflake:insert doc:name="Insert" doc:id="e00214fb-60c5-452e-81ff-107b3a483ab1" config-ref="Snowflake_Config1">
+			<snowflake:sql><![CDATA[insert into PERSONS(PersonID,FirstName,LastName,Address,City) values(:PersonID,:FirstName,:LastName,:Address,:City)
+]]></snowflake:sql>
+			<snowflake:input-parameters><![CDATA[#[{
+	"PersonID": (payload.PersonID as String default ""),
+	"FirstName": (payload.LastName default ""),
+	"LastName": (payload.FirstName default ""),
+	"Address": (payload.Address default ""),
+	"City": (payload.City default "")
+}]]]></snowflake:input-parameters>
+		</snowflake:insert>
+		</foreach>
+		<set-payload value='#["inserted"]' doc:name="Set Payload" doc:id="a3d40238-f3ff-4cdf-a94e-02646d1d662a" />
+	</flow>
+	<flow name="snowflakeFlow3" doc:id="69d84d7c-c050-4aba-8dba-1f0afe1938a1" >
+		<http:listener doc:name="Listener" doc:id="5b118a36-0154-483f-89ed-28e6265bad42" config-ref="HTTP_Listener_config" path="delete/{PERSONID}"/>
+		<snowflake:delete doc:name="Delete" doc:id="c2cbab06-a40b-4289-a8bb-7a0a3d0798b9" config-ref="Snowflake_Config1">
+			<snowflake:sql ><![CDATA[delete from PERSONS where PERSONID=:pid]]></snowflake:sql>
+			<snowflake:input-parameters ><![CDATA[#[{
+	pid: attributes.uriParams.PERSONID as Number
+}]]]></snowflake:input-parameters>
+		</snowflake:delete>
+		<set-payload value="deleted" doc:name="Set Payload" doc:id="474afb87-b149-4be8-9b97-9ad98df8e79c" />
+	</flow>
+	<flow name="snowflakeFlow4" doc:id="5aadfcfc-9e26-41c5-8823-bd756ca9dc1c" >
+		<http:listener doc:name="Listener" doc:id="33dd7df8-9f26-48ca-ba0f-9823745aaf4e" config-ref="HTTP_Listener_config" path="update"/>
+		<snowflake:update doc:name="Update" doc:id="ade08f12-6bde-4936-863f-6988653568c6" config-ref="Snowflake_Config1">
+			<snowflake:sql ><![CDATA[UPDATE PERSONS
+SET lastName = :lastName, firstName = :firstName
+where PERSONID=:pid]]></snowflake:sql>
+			<snowflake:input-parameters ><![CDATA[#[{
+	lastName: payload.lastName,
+	firstName: payload.firstName,
+	pid: attributes.uriParams.PERSONID as Number
+}]]]></snowflake:input-parameters>
+		</snowflake:update>
+		<set-payload value="updated" doc:name="Set Payload" doc:id="093e660d-67d0-4b1a-87f0-3421fedb1e3c" />
+	</flow>
+</mule>
